@@ -1,0 +1,70 @@
+name: Test Performance with Docker
+
+on:
+  push:
+
+jobs:
+  test-performance:
+    runs-on: [arc-runner-set]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start Database Container
+        run: |
+          docker run -d --name mysql-db -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=testdb -e MYSQL_USER=testuser -e MYSQL_PASSWORD=testpass mysql:5.7
+          docker ps
+
+      - name: Start Web Application Container
+        run: |
+          docker run -d --name web-app -p 8080:80 nginx
+          docker ps
+
+      - name: Install stress-ng
+        run: sudo apt-get update && sudo apt-get install -y stress-ng
+
+      - name: Run CPU and Memory Stress Test
+        run: |
+          echo "Running CPU and Memory Stress Test"
+          docker run --rm polinux/stress stress --cpu 4 --vm 2 --vm-bytes 512M --timeout 60s
+
+      - name: Install fio
+        run: sudo apt-get install -y fio
+
+      - name: Run Disk I/O Test
+        run: |
+          echo "Running Disk I/O Test"
+          docker run --rm alpine/fio fio --name=randwrite --ioengine=libaio --rw=randwrite --bs=4k --numjobs=1 --size=1G --runtime=60 --time_based --group_reporting
+
+      - name: Install iperf3
+        run: sudo apt-get install -y iperf3
+
+      - name: Run Network Performance Test
+        run: |
+          docker run -d --name iperf-server networkstatic/iperf3 -s
+          docker run --rm --link iperf-server networkstatic/iperf3 -c iperf-server -t 60
+          docker stop iperf-server
+
+      - name: Install sysbench
+        run: sudo apt-get install -y sysbench
+
+      - name: Run Database Performance Test
+        run: |
+          echo "Running Database Performance Test"
+          docker run --rm severalnines/sysbench sysbench --db-driver=mysql --mysql-host=mysql-db --mysql-user=testuser --mysql-password=testpass --mysql-db=testdb oltp_read_write run
+
+      - name: Install wrk
+        run: sudo apt-get install -y wrk
+
+      - name: Run Web Application Performance Test
+        run: |
+          echo "Running Web Application Performance Test"
+          wrk -t12 -c400 -d30s http://localhost:8080
+
+      - name: Stop and Remove Containers
+        run: |
+          docker stop mysql-db web-app
+          docker rm mysql-db web-app
