@@ -13,7 +13,7 @@ jobs:
     runs-on: ${{ github.event.inputs.target-scale-set }}  # use the set we specify
     strategy:
       matrix:  # generate 25 jobs
-        number: [1, 2, 3, 4, 5]
+        number: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         letter: [a, b, c, d, e]
     steps:
       - name: Hello world  # print a thing, should take a couple seconds to run
